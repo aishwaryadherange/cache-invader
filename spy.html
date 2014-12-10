@@ -1,0 +1,27 @@
+<html>
+    <script src="https://code.jquery.com/jquery-2.1.1.js"></script>
+    <script>
+        function iframeLoaded () {
+            var $iframe = $('iframe'),
+                $iframeHtml = $($('iframe')[0].contentWindow.document);
+        
+            
+            $iframeHtml.find('body').append('<div class="post-text"></div>');
+            $iframeHtml.find('head').append(
+                '<link rel="stylesheet"  href="http://cdn.sstatic.net/stackoverflow/all.css?v=f2c7f2aa5fe9">'
+            );
+            setTimeout(function () {
+                console.log($iframeHtml.find('.post-text').css('width'));
+                if ($iframeHtml.find('.post-text').css('width') == "660px") {
+                    console.log("User has previously visited stack overflow");
+                }
+                else {
+                    console.log("User ain't never visited stack overflow");
+                }
+                $iframeHtml.find('link').remove();
+                $iframe.remove();
+            }, 20);
+        }
+    </script>
+    <iframe src="iframe.html" onload="iframeLoaded()"><iframe>
+</html>
