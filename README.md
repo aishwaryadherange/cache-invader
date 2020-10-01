@@ -1,6 +1,6 @@
 ## What is this, and how does it work?
 
-It's a demonstration of the fact that cross-domain caching, as currently implemented in most or all major browsers, is a significant privacy hole, leaking information about the user's browsing history.
+It is a demonstration of the fact that cross-domain caching, as currently implemented in most or all major browsers, is a significant privacy hole, leaking information about the user's browsing history.
 
 ### A similar, recently fixed attack involving link styling
 
@@ -34,6 +34,6 @@ Rather than have the keys for browser cache entries be merely the URL of the res
 
 As noted by Felten and Schneider, there are other caching-related timing attacks on privacy that this fails to prevent (namely, timing attacks on the operating system's DNS cache, and timing attacks on intermediate proxy servers that perform caching). The latter cannot be solved purely by browser vendors; the former may be soluble by the same method.
 
-Additionally, there is the case of CDNs to consider. A significant part of the value of public CDNs comes from cross-domain caching - from the fact that my first visit to a website can be sped up by virtue of some of its scripts or stylesheets having been cached on visits to unrelated sites that requested them from the same CDN.
+Additionally, there is a case of CDNs to consider. A significant part of the value of public CDNs comes from cross-domain caching - from the fact that my first visit to a website can be sped up by virtue of some of its scripts or stylesheets having been cached on visits to unrelated sites that requested them from the same CDN.
 
 TODO: write up proposed fix that retains cross-domain caching for CDNs, involving extra header
